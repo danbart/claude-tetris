@@ -1,0 +1,48 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Issue Triage
+        id: claude-triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Analiza el issue #${{ github.event.issue.number }} de este repositorio
+            (Tetris vanilla-JS: index.html, style.css, game.js).
+
+            1. Lee el titulo y cuerpo del issue con `gh issue view ${{ github.event.issue.number }}`.
+            2. Segun el contenido, aplica las labels que correspondan usando SOLO estas
+               labels existentes del repo (no crees labels nuevas):
+               bug, documentation, duplicate, enhancement, good first issue,
+               help wanted, invalid, question, wontfix.
+               Aplica con `gh issue edit ${{ github.event.issue.number }} --add-label "<label>"`.
+               Puedes aplicar mas de una si corresponde.
+            3. Publica un comentario de diagnostico en español con
+               `gh issue comment ${{ github.event.issue.number }} --body "..."` que incluya:
+               - Resumen breve del problema o pedido.
+               - Area de codigo probablemente afectada (por ejemplo: estado del juego,
+                 colision, loop de animacion, render, input, geometria del canvas,
+                 HTML/CSS) segun la arquitectura descrita en CLAUDE.md.
+               - Causa probable o hipotesis inicial.
+               - Alcance sugerido para la solucion (que archivos tocar, que tener en cuenta).
+
+            No hagas cambios de codigo, no abras pull requests. Solo labels y el comentario
+            de diagnostico.
+          claude_args: |
+            --allowed-tools "Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*)"
