@@ -41,6 +41,8 @@ jobs:
                  HTML/CSS) segun la arquitectura descrita en CLAUDE.md.
                - Causa probable o hipotesis inicial.
                - Alcance sugerido para la solucion (que archivos tocar, que tener en cuenta).
+               El comentario debe estar en formato Markdown valido que GitHub pueda
+               renderizar correctamente (encabezados, listas, bloques de codigo, etc).
 
             No hagas cambios de codigo, no abras pull requests. Solo labels y el comentario
             de diagnostico.
