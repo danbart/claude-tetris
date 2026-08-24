@@ -28,6 +28,10 @@ const PIECES = [
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
+const HIGHSCORES_KEY = 'tetris-highscores';
+const BEST_COMBO_KEY = 'tetris-best-combo';
+const BEST_LINES_KEY = 'tetris-best-lines';
+
 const GRID_COLORS = {
   dark: '#22222e',
   light: '#d8d8e6',
@@ -45,8 +49,17 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeSwitch = document.getElementById('theme-switch');
+const highscoreListEl = document.getElementById('highscore-list');
+const overlayHighscoreListEl = document.getElementById('overlay-highscore-list');
+const bestComboEl = document.getElementById('best-combo');
+const bestLinesEl = document.getElementById('best-lines');
+const resetScoresBtn = document.getElementById('reset-scores-btn');
+const nameEntry = document.getElementById('name-entry');
+const nameInput = document.getElementById('name-input');
+const saveScoreBtn = document.getElementById('save-score-btn');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let combo, maxCombo, maxLinesClear;
 let theme = 'dark';
 
 function setTheme(t) {
@@ -121,8 +134,14 @@ function clearLines() {
     score += (LINE_SCORES[cleared] || 0) * level;
     level = Math.floor(lines / 10) + 1;
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    if (cleared > maxLinesClear) {
+      maxLinesClear = cleared;
+      saveBestIfHigher(BEST_LINES_KEY, maxLinesClear);
+      updateBestStatsDisplay();
+    }
     updateHUD();
   }
+  return cleared;
 }
 
 function ghostY() {
@@ -150,7 +169,17 @@ function softDrop() {
 
 function lockPiece() {
   merge();
-  clearLines();
+  const cleared = clearLines();
+  if (cleared > 0) {
+    combo++;
+    if (combo > maxCombo) {
+      maxCombo = combo;
+      saveBestIfHigher(BEST_COMBO_KEY, maxCombo);
+      updateBestStatsDisplay();
+    }
+  } else {
+    combo = 0;
+  }
   spawn();
 }
 
@@ -231,11 +260,125 @@ function drawNext() {
       drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB);
 }
 
+function loadHighscores() {
+  try {
+    const raw = localStorage.getItem(HIGHSCORES_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveHighscores(list) {
+  try {
+    localStorage.setItem(HIGHSCORES_KEY, JSON.stringify(list));
+  } catch (e) {
+    // localStorage unavailable (quota, private mode, sandboxed iframe) — ignore.
+  }
+}
+
+function qualifiesForHighscore(s) {
+  const list = loadHighscores();
+  return list.length < 5 || s > list[list.length - 1].score;
+}
+
+function addHighscore(name, s, l) {
+  const list = loadHighscores();
+  const entry = { name, score: s, lines: l };
+  list.push(entry);
+  list.sort((a, b) => b.score - a.score);
+  const trimmed = list.slice(0, 5);
+  saveHighscores(trimmed);
+  return { list: trimmed, entry };
+}
+
+function renderHighscoreList(el, list, highlightEntry) {
+  el.innerHTML = '';
+  if (!list.length) {
+    const li = document.createElement('li');
+    li.className = 'hs-empty';
+    li.textContent = 'Sin récords todavía';
+    el.appendChild(li);
+    return;
+  }
+  list.forEach(entry => {
+    const li = document.createElement('li');
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = entry.name;
+    const scoreSpan = document.createElement('span');
+    scoreSpan.textContent = entry.score.toLocaleString();
+    li.appendChild(nameSpan);
+    li.appendChild(scoreSpan);
+    if (highlightEntry && entry === highlightEntry) {
+      li.classList.add('new-record');
+    }
+    el.appendChild(li);
+  });
+}
+
+function renderAllHighscores(highlightEntry) {
+  const list = loadHighscores();
+  renderHighscoreList(highscoreListEl, list, highlightEntry);
+  renderHighscoreList(overlayHighscoreListEl, list, highlightEntry);
+}
+
+function loadBestNumber(key) {
+  try {
+    const v = parseInt(localStorage.getItem(key), 10);
+    return Number.isFinite(v) ? v : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function saveBestIfHigher(key, value) {
+  if (value > loadBestNumber(key)) {
+    try {
+      localStorage.setItem(key, String(value));
+    } catch (e) {
+      // localStorage unavailable (quota, private mode, sandboxed iframe) — ignore.
+    }
+  }
+}
+
+function updateBestStatsDisplay() {
+  bestComboEl.textContent = loadBestNumber(BEST_COMBO_KEY);
+  bestLinesEl.textContent = loadBestNumber(BEST_LINES_KEY);
+}
+
+function resetHighscores() {
+  try {
+    localStorage.removeItem(HIGHSCORES_KEY);
+    localStorage.removeItem(BEST_COMBO_KEY);
+    localStorage.removeItem(BEST_LINES_KEY);
+  } catch (e) {
+    // localStorage unavailable (quota, private mode, sandboxed iframe) — ignore.
+  }
+  renderAllHighscores(null);
+  updateBestStatsDisplay();
+}
+
+function saveHighscoreEntry() {
+  const name = nameInput.value.trim() || 'Jugador';
+  const { list, entry } = addHighscore(name, score, lines);
+  renderAllHighscores(entry);
+  nameEntry.classList.add('hidden');
+}
+
 function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
+  renderAllHighscores(null);
+  if (qualifiesForHighscore(score)) {
+    nameEntry.classList.remove('hidden');
+    nameInput.value = '';
+    nameInput.focus();
+  } else {
+    nameEntry.classList.add('hidden');
+  }
   overlay.classList.remove('hidden');
 }
 
@@ -278,11 +421,15 @@ function init() {
   gameOver = false;
   dropInterval = 1000;
   dropAccum = 0;
+  combo = 0;
+  maxCombo = 0;
+  maxLinesClear = 0;
   lastTime = performance.now();
   next = randomPiece();
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
+  nameEntry.classList.add('hidden');
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
@@ -318,5 +465,11 @@ themeSwitch.addEventListener('change', () => {
   setTheme(themeSwitch.checked ? 'light' : 'dark');
 });
 
+saveScoreBtn.addEventListener('click', saveHighscoreEntry);
+
+resetScoresBtn.addEventListener('click', resetHighscores);
+
 setTheme('dark');
+renderAllHighscores(null);
+updateBestStatsDisplay();
 init();
