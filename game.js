@@ -57,10 +57,23 @@ const START_LEVEL_KEY = 'tetris-start-level';
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let theme = 'dark';
 let controlsExpanded = false;
+let startLevel = 1;
 
 function getStartLevel() {
-  const stored = parseInt(localStorage.getItem(START_LEVEL_KEY), 10);
-  return Number.isInteger(stored) && stored >= 1 && stored <= 10 ? stored : 1;
+  try {
+    const stored = parseInt(localStorage.getItem(START_LEVEL_KEY), 10);
+    return Number.isInteger(stored) && stored >= 1 && stored <= 10 ? stored : 1;
+  } catch (e) {
+    return 1;
+  }
+}
+
+function setStartLevel(value) {
+  try {
+    localStorage.setItem(START_LEVEL_KEY, String(value));
+  } catch (e) {
+    // localStorage unavailable (private browsing, disabled storage, etc.) — ignore.
+  }
 }
 
 function setTheme(t) {
@@ -133,7 +146,7 @@ function clearLines() {
   if (cleared) {
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
-    level = Math.floor(lines / 10) + 1;
+    level = startLevel + Math.floor(lines / 10);
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
     updateHUD();
   }
@@ -286,7 +299,8 @@ function init() {
   board = createBoard();
   score = 0;
   lines = 0;
-  level = getStartLevel();
+  startLevel = getStartLevel();
+  level = startLevel;
   paused = false;
   gameOver = false;
   controlsExpanded = false;
@@ -342,7 +356,7 @@ toggleControlsBtn.addEventListener('click', () => {
 startLevelSelect.addEventListener('change', () => {
   const chosen = parseInt(startLevelSelect.value, 10);
   if (Number.isInteger(chosen) && chosen >= 1 && chosen <= 10) {
-    localStorage.setItem(START_LEVEL_KEY, String(chosen));
+    setStartLevel(chosen);
   }
 });
 
@@ -351,5 +365,4 @@ themeSwitch.addEventListener('change', () => {
 });
 
 setTheme('dark');
-startLevelSelect.value = String(getStartLevel());
 init();
